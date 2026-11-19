@@ -1,0 +1,9 @@
+﻿strategy,point_id,block,tags,L2_on,L3_on,L4_on,L5_on,L6_on,L3_share,L4_limit,L5_liters,L6_cap
+S1,A31,A,robust_minimax,True,True,True,True,True,0.0,0.22,70.0,1.35
+S2,A15,A,equal_weights@0.2; utopia@0.2,True,True,True,True,True,0.05,0.13,65.0,1.05
+S3,A53,A,equal_weights@0.45,True,True,True,True,True,0.0,0.1,50.0,1.1500000000000001
+S4,A41,A,equal_weights@0.7,True,True,True,True,True,0.15000000000000002,0.08,60.0,1.75
+S5,A09,A,utopia@0.45,True,True,True,True,True,0.1,0.03,45.0,1.25
+S6,A23,A,utopia@0.7,True,True,True,True,True,0.05,0.09,50.0,1.55
+S7,A30,A,min_K0@0.45,True,True,True,True,True,0.45,0.11,40.0,1.35
+S8,A11,A,min_K4@0.45; min_K4@0.7,True,True,True,True,True,0.1,0.0,40.0,1.0
