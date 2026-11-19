@@ -53,10 +53,12 @@ def read_results(path) -> pd.DataFrame:
 
 class _KeepAwake:
     """Windows: запрет сна на время прогонов (SetThreadExecutionState). На других ОС ничего не делает."""
+
     def __enter__(self):
         if sys.platform == "win32":
             import ctypes
-            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                0x80000000 | 0x00000001)
         return self
 
     def __exit__(self, *a):
@@ -79,7 +81,8 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
         columns = list(prev.columns)
         done = set(prev["run_id"])
         jobs = [j for j in jobs if j["run_id"] not in done]
-        print(f"{time.strftime('%H:%M:%S')} уже посчитано {len(done)}, осталось {len(jobs)}", flush=True)
+        print(
+            f"{time.strftime('%H:%M:%S')} уже посчитано {len(done)}, осталось {len(jobs)}", flush=True)
     total = len(jobs)
     if total == 0:
         return read_results(out_csv)
@@ -94,7 +97,8 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
         df = pd.DataFrame(buffer)
         if columns is None:
             columns = list(df.columns)
-        df.reindex(columns=columns).to_csv(out_csv, mode="a", header=not out_csv.exists(), index=False)
+        df.reindex(columns=columns).to_csv(out_csv, mode="a",
+                                           header=not out_csv.exists(), index=False)
         buffer = []
 
     def handle(r):
@@ -102,7 +106,8 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
         n_done += 1
         if "error" in r:
             n_err += 1
-            pd.DataFrame([r]).to_csv(err_csv, mode="a", header=not err_csv.exists(), index=False)
+            pd.DataFrame([r]).to_csv(err_csv, mode="a",
+                                     header=not err_csv.exists(), index=False)
             print(f"ОШИБКА в {r['run_id']}:\n{r['error'][-800:]}", flush=True)
         else:
             buffer.append(r)
@@ -122,25 +127,32 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
         try:
             if n_workers <= 1:
                 if link is None:
-                    raise ValueError("для n_workers = 1 нужен link = ar.make_link(CFG)")
+                    raise ValueError(
+                        "для n_workers = 1 нужен link = ar.make_link(CFG)")
                 for j in jobs:
                     try:
                         handle(ar.run_one(link, j, cfg))
                     except Exception:
-                        handle({"run_id": j["run_id"], "error": traceback.format_exc()})
+                        handle({"run_id": j["run_id"],
+                               "error": traceback.format_exc()})
             else:
                 ex = ProcessPoolExecutor(max_workers=n_workers, mp_context=get_context("spawn"),
                                          initializer=_init, initargs=(cfg,))
                 try:
                     pending = {ex.submit(_task, j) for j in jobs}
                     while pending:
-                        fin, pending = wait(pending, timeout=log_every, return_when=FIRST_COMPLETED)
+                        fin, pending = wait(
+                            pending, timeout=log_every, return_when=FIRST_COMPLETED)
                         if not fin:
-                            print(f"{time.strftime('%H:%M:%S')} ... работаю, {n_done}/{total}", flush=True)
+                            print(
+                                f"{time.strftime('%H:%M:%S')} ... работаю, {n_done}/{total}", flush=True)
                         for f in fin:
                             handle(f.result())
                 finally:
-                    ex.shutdown(wait=True, cancel_futures=True)
+                    # процесс с JVM сам не завершается (JPype ждёт потоки NetLogo) - завершаем принудительно
+                    for p in list(getattr(ex, "_processes", {}).values()):
+                        p.terminate()
+                    ex.shutdown(wait=False, cancel_futures=True)
         finally:
             flush()
     el = time.perf_counter() - t0
