@@ -1,0 +1,136 @@
+{
+ "created": "2026-11-19 13:32",
+ "netlogo_version": "7.0.4",
+ "model_file": "refinery_shock_abm.nlogox",
+ "model_sha256": "2b246166dc0c118265a926ba837fad5e54d133f1dc980da4569aabaff48f5379",
+ "python": "3.13.14",
+ "pynetlogo": "0.5.2",
+ "horizon": 365,
+ "checkpoints": [
+  30,
+  90,
+  180,
+  365
+ ],
+ "shock_levels": [
+  0.2,
+  0.45,
+  0.7
+ ],
+ "shock_mid": 0.45,
+ "lever_on": {
+  "L3-share-naphtha": 0.15,
+  "L4-import-limit": 0.1,
+  "L5-liters-per-fillup": 30.0,
+  "L6-price-cap": 1.1
+ },
+ "lever_ranges": {
+  "L3-share-naphtha": [
+   0.0,
+   0.5
+  ],
+  "L4-import-limit": [
+   0.0,
+   0.3
+  ],
+  "L5-liters-per-fillup": [
+   10,
+   70
+  ],
+  "L6-price-cap": [
+   1.0,
+   2.0
+  ]
+ },
+ "unc_ranges": {
+  "panic-sensitivity": [
+   0.5,
+   2.0
+  ],
+  "tau-down": [
+   7,
+   30
+  ],
+  "w-own-experience": [
+   0.2,
+   0.8
+  ],
+  "price-elasticity": [
+   -0.4,
+   -0.05
+  ],
+  "normal-surplus": [
+   0.02,
+   0.12
+  ]
+ },
+ "c3_range": [
+  0.05,
+  0.5
+ ],
+ "interface_defaults": {
+  "L2-export-ban?": false,
+  "L3-quality-relax?": false,
+  "L4-import?": false,
+  "L5-fillup-limit?": false,
+  "L6-price-cap?": false,
+  "L3-share-naphtha": 0.15,
+  "L4-import-limit": 0.1,
+  "L4-subsidy": 0.25,
+  "L5-liters-per-fillup": 30.0,
+  "L6-price-cap": 1.1,
+  "shock-depth": 0.45
+ },
+ "nominal_uncertain": {
+  "panic-sensitivity": 1.0,
+  "tau-down": 14.0,
+  "w-own-experience": 0.5,
+  "price-elasticity": -0.2,
+  "normal-surplus": 0.06
+ },
+ "constants": {
+  "shock-start": 5.0,
+  "policy-delay": 8.0,
+  "L3-ramp-days": 7.0,
+  "L4-import-delay": 14.0,
+  "n-refineries": 3.0,
+  "n-stations": 40.0,
+  "n-consumers": 5000.0,
+  "normal-surplus": 0.06,
+  "naphtha-ratio": 0.6,
+  "refinery-storage-days": 7.0,
+  "transport-delay": 2.0,
+  "liters-per-car-day": 3.0,
+  "tank-liters": 50.0,
+  "canister-liters": 20.0,
+  "reorder-threshold": 0.2,
+  "price-elasticity": -0.2,
+  "panic-sensitivity": 1.0,
+  "w-own-experience": 0.5,
+  "tau-up": 2.0,
+  "tau-down": 14.0,
+  "base-search-radius": 5.0,
+  "radius-growth": 3.0,
+  "max-radius": 72.12489168102785,
+  "price-adj-speed": 0.05,
+  "ref-price": 1.0,
+  "price-coverage-coef": 0.98,
+  "service-reserve": 2.5,
+  "normal-visits": 9.375,
+  "station-service-capacity": 23.4375,
+  "D0": 15000.0,
+  "target-coverage": 1.9695623370835194
+ },
+ "master_seed": 20261119,
+ "r_screen": 50,
+ "delta": 0.05,
+ "n_workers": 1,
+ "runs_per_hour": 164.33666376200247,
+ "screening_design": "half_resV",
+ "checks": {
+  "2^(5-1): главные эффекты и парные взаимодействия не смешаны": {
+   "ok": true,
+   "detail": ""
+  }
+ }
+}
