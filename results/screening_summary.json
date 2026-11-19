@@ -1,0 +1,65 @@
+{
+ "created": "2026-11-19 18:05",
+ "model_sha256": "2b246166dc0c118265a926ba837fad5e54d133f1dc980da4569aabaff48f5379",
+ "design": "full 2^5",
+ "R": 5,
+ "seeds": [
+  347,
+  164,
+  159,
+  797,
+  98
+ ],
+ "shocks": [
+  0.2,
+  0.45,
+  0.7
+ ],
+ "lever_on": {
+  "L3-share-naphtha": 0.15,
+  "L4-import-limit": 0.1,
+  "L5-liters-per-fillup": 30.0,
+  "L6-price-cap": 1.1
+ },
+ "eta2_min": 0.05,
+ "n_runs": 485,
+ "sec_per_run_mean": 22.48067748145889,
+ "n_workers": 2,
+ "runs_per_hour": 349.4823303599943,
+ "k5_background": 13675.069866666832,
+ "levers_keep": [
+  "L2",
+  "L3",
+  "L4",
+  "L5",
+  "L6"
+ ],
+ "levers_drop": [],
+ "combos_dominated_everywhere": [
+  "L3+L5",
+  "L5"
+ ],
+ "top_terms": {
+  "K2 @ 0.7": "L4",
+  "K3_volume @ 0.2": "L3",
+  "K2 @ 0.45": "L4",
+  "K3_volume @ 0.45": "L3",
+  "K3_volume @ 0.7": "L3",
+  "K2 @ 0.2": "L4",
+  "K1 @ 0.7": "L6",
+  "K4 @ 0.7": "L6",
+  "K1 @ 0.45": "L6",
+  "K4 @ 0.45": "L6",
+  "K5_hours @ 0.7": "L6",
+  "K1 @ 0.2": "L6",
+  "K4 @ 0.2": "L6",
+  "K0 @ 0.7": "L6",
+  "K5_hours @ 0.45": "L6",
+  "K5_hours @ 0.2": "L5",
+  "K0 @ 0.45": "L6",
+  "K0@90 @ 0.7": "L6",
+  "K0@90 @ 0.45": "L6",
+  "K0 @ 0.2": "L4",
+  "K0@90 @ 0.2": "L4"
+ }
+}
