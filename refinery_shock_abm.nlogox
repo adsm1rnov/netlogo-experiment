@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8"?>
+<model version="NetLogo 7.0.3" snapToGrid="false">
+  <code>;; =====================================================================
+;; ABM "Refinery outages and gasoline shortage" - simplified version (NetLogo 7)
+;; 1 tick = 1 day. Volumes are in liters. Price is an index relative to the reference price
+;; ref-price = 1 monetary unit (m.u.) per liter.
+;; Interface: only the decision-maker levers (L2-L6), shock-depth and the technical seed.
+;; Everything else is a constant set in the set-constants procedure (block "=== CONSTANTS ===").
+;; L1 = "do nothing" (baseline) and has no switch in the model.
+;; Policy packages are switch combinations: P0 - all off; P1 - L3 + L5 + L6; P2 - L2 + L4.
+;; KPIs: K0 physical shortage, K1 demand cut by price, K2 import subsidy,
+;;       K3 low-grade gasoline volume, K4 consumer overpayment, K5 queue hours.
+;; =====================================================================
+
+breed [refineries refinery]      ; refineries
+breed [stations station]         ; gas stations
+breed [consumers consumer]       ; 1 agent = 1 car
+
+globals [
+  ;; --- constants (values are set only in set-constants) ---
+  shock-start policy-delay L3-ramp-days L4-import-delay
+  n-refineries n-stations n-consumers normal-surplus naphtha-ratio refinery-storage-days transport-delay
+  liters-per-car-day tank-liters canister-liters reorder-threshold price-elasticity panic-sensitivity
+  w-own-experience tau-up tau-down base-search-radius radius-growth max-radius
+  price-adj-speed ref-price price-coverage-coef
+  service-reserve normal-visits station-service-capacity
+  ;; --- state ---
+  seed-used                ; seed actually used (random when seed = 0)
+  D0                       ; baseline market demand, L/day = n-consumers * liters-per-car-day
+  total-need               ; actual sum of individual needs (approx. D0)
+  target-coverage          ; target coverage of demand by station stocks, days: sum(target-days * base-sales) / sum(base-sales)
+  price                    ; price index (1 = ref-price)
+  K0-total                 ; physical shortage, L
+  K1-total                 ; demand cut by price, L
+  K2-total                 ; import subsidies, m.u.
+  K3-volume-total          ; low-grade gasoline output, L
+  K4-total                 ; consumer overpayment, m.u.
+  K5-total-hours           ; queues, car-hours
+  dry-share                ; share of dry stations (stock &lt; 5% of capacity) at the end of the day
+  shock-active? policy-active?
+  L2-active? L3-active? L4-active? L5-active? L6-active?
+  production-today export-today import-today sales-today
+  consumption-today        ; sum of c (desired consumption) for the day
+  K0-today                 ; physical shortage for the day, L
+  K1-today                 ; sum of (need - c) for the day
+  desired-today            ; sum of desired purchases of today's buyers
+  desired-avg              ; smoothed (EMA, 7 days) sum of desired purchases - denominator of coverage in the price formula
+  station-stock-at-order   ; sum of station stocks at ordering time
+  overflow-returned-total  ; volume that did not fit into stations on delivery and was returned to the refinery (control)
+  refinery-hues            ; refinery color palette
+]
+
+refineries-own [
+  capacity                 ; Euro-5 capacity, L/day
+  naphtha-capacity         ; naphtha volume, L/day
+  storage-cap              ; storage tank capacity, L
+  stock                    ; stock in the tank, L
+  shocked?                 ; refinery No. 1 (who = 0) is the damaged one
+  hue
+  my-stations              ; stations supplied by this refinery
+  produced-today exported-today
+]
+
+stations-own [
+  supplier                 ; supplying refinery (logical link, no visual links)
+  pipeline                 ; delivery queue from the supplier: list of length transport-delay
+  hue
+  target-days              ; target stock in days of sales, 1-3 (individual for each station)
+  base-sales               ; baseline sales, L/day
+  stock                    ; stock, L
+  max-stock                ; capacity, L = 2 * target-days * base-sales
+  avg-sales                ; smoothed sales (exponential, 7 days)
+  sales-day                ; sales for the current day
+  visits-today             ; cars served today
+  order-qty                ; today's order to the supplier
+  shortfall                ; gap to the target stock (used for imports)
+]
+
+consumers-own [
+  need                     ; daily need, L
+  tank-cap canister-cap
+  panic-i                  ; individual propensity to panic
+  fuel-stock               ; fuel in the tank + canisters, L
+  perceived-shortage
+  search-radius
+  failed-today?            ; failed refueling attempt today (yesterday's value until reset)
+  desired                  ; desired purchase today
+  home-station             ; nearest station (for baseline sales and the lower bound of the search radius)
+]
+
+;; ---------------------------------------------------------------------
+;; === CONSTANTS ===
+;; Called in setup after choosing the seed (policy-delay is random) and after resize-world (max-radius).
+;; ---------------------------------------------------------------------
+to set-constants
+  ;; scenario
+  set shock-start 5                  ; day the shock starts (5 "normal" days before the shock)
+  set policy-delay 7 + random 4      ; 7-10 days from the shock to the measures taking effect (recognition + decision)
+  set L3-ramp-days 7                 ; L3: days for refineries to switch to the lower grade after measures take effect
+  set L4-import-delay 14             ; L4: days from measures taking effect to the first import batches (logistics)
+  ;; market
+  set n-refineries 3                 ; number of refineries; refinery No. 1 (who = 0) is damaged
+  set n-stations 40                  ; number of gas stations
+  set n-consumers 5000               ; number of cars (1 agent = 1 car)
+  set normal-surplus 0.06            ; refinery capacity above domestic demand; exported in normal times (China: 0.064)
+  set naphtha-ratio 0.6              ; naphtha volume per liter of Euro-5 capacity (feedstock for L3)
+  set refinery-storage-days 7        ; refinery tank capacity, days of capacity
+  set transport-delay 2              ; days in transit refinery -&gt; station (constant, independent of distance)
+  ;; consumers
+  set liters-per-car-day 3           ; average daily consumption, L/car (China: 2.9)
+  set tank-liters 50                 ; tank, L
+  set canister-liters 20             ; canisters during panic, L
+  set reorder-threshold 0.2          ; share of the tank below which a car goes to refuel
+  set price-elasticity -0.2          ; short-run price elasticity of demand: c = need * price ^ price-elasticity
+  set panic-sensitivity 1.0          ; mean propensity to panic (individual ~ N(1, 0.5), not below 0)
+  set w-own-experience 0.5           ; weight of own experience (failed refueling) vs. the share of dry stations
+  set tau-up 2                       ; days of smoothing for perceived shortage going up (panic is fast)
+  set tau-down 14                    ; days of smoothing going down (calming down is slow)
+  set base-search-radius 5           ; base station search radius, patches
+  set radius-growth 3                ; radius increase after a failed attempt, patches
+  set max-radius sqrt (world-width ^ 2 + world-height ^ 2)   ; not a parameter: radius is bounded by the world diagonal
+  ;; price and money (unit = monetary unit, m.u.)
+  set price-adj-speed 0.05           ; daily price adjustment speed (tuned for check C1)
+  set ref-price 1                    ; reference price, m.u./L; price is an index relative to it
+  set price-coverage-coef 0.98       ; target coverage = 0.98 * sales-weighted mean target-days (C1 calibration, see calibrate-supply)
+  ;; station service capacity is a formula, not a parameter
+  set normal-visits (n-consumers / n-stations) * liters-per-car-day / ((1 - reorder-threshold) * tank-liters)
+  set service-reserve 2.5            ; service capacity reserve over the normal flow of cars:
+                                     ; station catchment areas differ by ~1.5x, plus a surge of visits during panic
+  set station-service-capacity service-reserve * normal-visits   ; cars/day per station
+end
+
+;; ---------------------------------------------------------------------
+;; SETUP
+;; ---------------------------------------------------------------------
+to setup
+  clear-all
+  ifelse seed = 0 [ set seed-used new-seed ] [ set seed-used seed ]   ; seed = 0 - random seed
+  random-seed seed-used
+  resize-world -25 25 -25 25            ; 51x51 city; distances are computed without world wrapping
+  set-constants
+  set-default-shape refineries "house"
+  set-default-shape stations "square"
+  set-default-shape consumers "dot"
+  set D0 n-consumers * liters-per-car-day
+  set price 1
+  set K0-total 0  set K1-total 0  set K2-total 0
+  set K3-volume-total 0  set K4-total 0  set K5-total-hours 0
+  set dry-share 0
+  set overflow-returned-total 0
+  set desired-avg D0
+  set refinery-hues [105 65 25 125 15 85 45 135]
+  setup-refineries
+  setup-stations
+  setup-consumers
+  calibrate-supply
+  reset-ticks
+  update-flags
+  update-visuals
+end
+
+;; Refineries are placed randomly in the inner area of the map, like stations.
+;; Refinery location does NOT affect the dynamics: the delivery delay transport-delay is constant, and the
+;; station's supplier is chosen regardless of distance. Refinery coordinates are only for the picture.
+to setup-refineries
+  create-refineries n-refineries [
+    setxy (-18 + random-float 36) (-18 + random-float 36)
+    set size 4
+    set hue item (who mod length refinery-hues) refinery-hues
+    set color hue
+    set shocked? (who = 0)
+    set stock 0  set capacity 0
+  ]
+end
+
+;; Euclidean distance to agent t without world wrapping
+to-report flat-distance [t]
+  report sqrt ((xcor - [xcor] of t) ^ 2 + (ycor - [ycor] of t) ^ 2)
+end
+
+;; Stations are placed in the inner square, stratified (one per random grid cell),
+;; so that catchment areas do not differ by an order of magnitude.
+;; The supplier is random and independent of location: stations of different refineries are mixed across the map.
+;; The assignment is balanced (a shuffled list of stations is dealt to refineries in turn): each refinery has
+;; ~n-stations / n-refineries stations, and the market share of refinery No. 1 barely depends on the seed.
+to setup-stations
+  let cols ceiling sqrt n-stations
+  let rows ceiling (n-stations / cols)
+  let cells shuffle n-values (cols * rows) [ i -&gt; i ]
+  let cw 36 / cols
+  let ch 36 / rows
+  create-stations n-stations [
+    let cell item (who - n-refineries) cells
+    setxy (-18 + (cell mod cols) * cw + cw * (0.25 + random-float 0.5))
+          (-18 + (floor (cell / cols)) * ch + ch * (0.25 + random-float 0.5))
+    set size 1.6
+    set target-days 1 + random-float 2
+    set pipeline []
+    set visits-today 0
+    set sales-day 0
+    set shortfall 0
+  ]
+  let shuffled shuffle sort stations
+  (foreach shuffled range length shuffled [ [s i] -&gt;
+    ask s [ set supplier refinery (i mod n-refineries) ]
+  ])
+  ask stations [
+    set hue [hue] of supplier
+    set color hue
+  ]
+  ask refineries [ set my-stations stations with [ supplier = myself ] ]
+end
+
+;; consumers
+to setup-consumers
+  create-consumers n-consumers [
+    setxy (-20 + random-float 40) (-20 + random-float 40)
+    set size 0.5
+    set color gray
+    set need liters-per-car-day * max (list 0.3 (random-normal 1 0.3))
+    set tank-cap tank-liters
+    set canister-cap canister-liters
+    set panic-i max (list 0 (random-normal panic-sensitivity (0.5 * panic-sensitivity)))
+    ; stationary start: refueling phases are uniformly distributed
+    set fuel-stock tank-cap * (reorder-threshold + random-float (1 - reorder-threshold))
+    set perceived-shortage 0
+    set search-radius base-search-radius
+    set failed-today? false
+    set desired 0
+    set home-station min-one-of stations [ flat-distance myself ]
+  ]
+  set total-need sum [need] of consumers
+end
+
+;; station baseline sales = demand of its catchment area;
+;; refinery capacity = (1 + normal-surplus) * sum of baseline sales of its stations.
+to calibrate-supply
+  ask stations [ set base-sales 0 ]
+  ask consumers [ ask home-station [ set base-sales base-sales + [need] of myself ] ]
+  ask stations [
+    set base-sales max (list base-sales 1)                 ; guard against zero
+    set avg-sales base-sales
+    set sales-day base-sales
+    set stock target-days * base-sales
+    set max-stock 2 * target-days * base-sales
+    set pipeline n-values transport-delay [ base-sales ]
+  ]
+  ; coefficient 0.98 was calibrated on check C1: because of the station capacity limit (2 * target-days) and discrete
+  ; refueling, the mean stock at ordering time is ~2% below target; with 1.0 the no-shock price would stay at ~1.02
+  set target-coverage price-coverage-coef * (sum [target-days * base-sales] of stations) / (sum [base-sales] of stations)
+  ask refineries [
+    set capacity (1 + normal-surplus) * sum [base-sales] of my-stations
+    set naphtha-capacity capacity * naphtha-ratio
+    set storage-cap refinery-storage-days * capacity
+    set stock 0.5 * storage-cap
+  ]
+end
+
+;; ---------------------------------------------------------------------
+;; GO: one day. There is no time limit: the run length is set by the user
+;; (go button) or by the experiment's time_limit.
+;; ---------------------------------------------------------------------
+to go
+  update-flags
+  produce
+  order-and-ship
+  do-import
+  perceive-shortage
+  consume
+  decide-and-buy
+  update-price
+  update-kpi
+  update-dry-share
+  update-visuals
+  ask stations [ set visits-today 0 ]
+  tick
+end
+
+;; shock and policy flags: each measure has its own switch and takes effect policy-delay days after the shock starts
+to update-flags
+  set shock-active? (ticks &gt;= shock-start)                       ; the shock is permanent, until the end of the run
+  set policy-active? (ticks &gt;= shock-start + policy-delay)
+  set L2-active? (L2-export-ban? and policy-active?)
+  set L3-active? (L3-quality-relax? and ticks &gt;= shock-start + policy-delay + L3-ramp-days)
+  set L4-active? (L4-import? and ticks &gt;= shock-start + policy-delay + L4-import-delay)
+  set L5-active? (L5-fillup-limit? and policy-active?)
+  set L6-active? (L6-price-cap? and policy-active?)
+end
+
+;; production, L3, exports (fixed share + tank overflow), L2
+to produce
+  set production-today 0
+  set export-today 0
+  ask refineries [
+    let avail ifelse-value (shocked? and shock-active?) [ capacity * (1 - shock-depth) ] [ capacity ]
+    let euro5 avail
+    let low-grade 0
+    if L3-active? and capacity &gt; 0 [
+      set low-grade L3-share-naphtha * naphtha-capacity * (avail / capacity)
+    ]
+    set K3-volume-total K3-volume-total + low-grade
+    ; in normal times a fixed share of Euro-5 output is exported; L3 gasoline stays entirely on the domestic market
+    let exported ifelse-value L2-active? [ 0 ] [ euro5 * normal-surplus / (1 + normal-surplus) ]
+    set stock stock + euro5 + low-grade - exported
+    if stock &gt; storage-cap [                       ; anything above tank capacity cannot be stored and is exported
+      set exported exported + (stock - storage-cap)
+      set stock storage-cap
+    ]
+    set produced-today euro5 + low-grade
+    set exported-today exported
+    set production-today production-today + produced-today
+    set export-today export-today + exported
+  ]
+end
+
+;; station orders (Sterman: stock + supply line), proportional shipping, delivery queue
+to order-and-ship
+  ask stations [
+    set avg-sales avg-sales + (sales-day - avg-sales) / 7
+    let pipeline-total sum pipeline
+    let target-stock target-days * avg-sales
+    let target-pipeline transport-delay * avg-sales
+    set order-qty max (list 0 (avg-sales + (target-stock - stock) / 3 + (target-pipeline - pipeline-total) / 3))
+  ]
+  set station-stock-at-order sum [stock] of stations
+  ask refineries [
+    let total-orders sum [order-qty] of my-stations
+    let ship-total min (list stock total-orders)
+    ask my-stations [
+      let q 0
+      if total-orders &gt; 0 [ set q order-qty * ship-total / total-orders ]
+      set pipeline lput q pipeline                 ; shipment goes to the end of the queue
+    ]
+    set stock stock - ship-total
+  ]
+  ask stations [                                   ; from the head of the queue into the station stock
+    let arrival first pipeline
+    set pipeline but-first pipeline
+    set stock stock + arrival
+    if stock &gt; max-stock [                         ; does not fit into the station capacity - the excess is returned
+      let excess stock - max-stock                 ; to the supplier's tank (not lost)
+      set overflow-returned-total overflow-returned-total + excess
+      ask supplier [ set stock stock + excess ]
+      set stock max-stock
+    ]
+  ]
+end
+
+;; subsidized imports with a physical limit (L4); subsidy = L4-subsidy * ref-price m.u. per liter
+to do-import
+  set import-today 0
+  if L4-active? [
+    ask stations [ set shortfall max (list 0 (target-days * avg-sales - stock)) ]
+    let total-short sum [shortfall] of stations
+    let vol min (list (L4-import-limit * D0) total-short)
+    if vol &gt; 0 [
+      ask stations [ set stock stock + vol * shortfall / total-short ]
+      set import-today vol
+      set K2-total K2-total + L4-subsidy * ref-price * vol
+    ]
+  ]
+end
+
+;; perceived shortage (based on yesterday's results), asymmetric smoothing
+to perceive-shortage
+  ask consumers [
+    let o w-own-experience * (ifelse-value failed-today? [ 1 ] [ 0 ]) + (1 - w-own-experience) * dry-share
+    ifelse o &gt; perceived-shortage
+      [ set perceived-shortage perceived-shortage + (o - perceived-shortage) / tau-up ]
+      [ set perceived-shortage perceived-shortage + (o - perceived-shortage) / tau-down ]
+  ]
+end
+
+;; consumption, K0 (physical shortage), K1 (demand cut by price)
+to consume
+  set consumption-today 0
+  set K0-today 0
+  set K1-today 0
+  let pf price ^ price-elasticity
+  ask consumers [
+    let c need * pf
+    set K1-today K1-today + max (list 0 (need - c))
+    let used min (list c fuel-stock)
+    set K0-today K0-today + (c - used)
+    set fuel-stock fuel-stock - used
+    set consumption-today consumption-today + c
+  ]
+  set K0-total K0-total + K0-today
+  set K1-total K1-total + K1-today
+end
+
+;; refueling decision, station search, purchase, queues (K5)
+to decide-and-buy
+  set sales-today 0
+  ask stations [ set sales-day 0 ]
+  ask consumers [
+    set failed-today? false
+    set desired 0
+    let threshold min (list 0.95 (reorder-threshold + panic-i * perceived-shortage * 0.5))
+    if fuel-stock &lt; threshold * tank-cap [
+      set desired tank-cap + panic-i * perceived-shortage * canister-cap - fuel-stock
+      set desired min (list desired (tank-cap + canister-cap - fuel-stock))   ; not more than tank + canisters
+      if L5-active? [ set desired min (list desired L5-liters-per-fillup) ]
+      set desired max (list 0 desired)
+    ]
+  ]
+  set desired-today sum [desired] of consumers
+  set desired-avg desired-avg + (desired-today - desired-avg) / 7
+  ask consumers with [ desired &gt; 0 ] [ try-to-buy ]   ; ask processes agents in random order
+end
+
+to try-to-buy
+  let cx xcor
+  let cy ycor
+  ; the search radius is not smaller than the distance to the nearest station
+  let d2-home ((xcor - [xcor] of home-station) ^ 2 + (ycor - [ycor] of home-station) ^ 2)
+  let r2 (max (list (search-radius ^ 2) d2-home)) + 0.0001       ; squared distances, no sqrt
+  let candidates stations with [
+    stock &gt; 1 and visits-today &lt; station-service-capacity
+    and ((xcor - cx) ^ 2 + (ycor - cy) ^ 2) &lt;= r2 ]
+  ifelse any? candidates [
+    let s min-one-of candidates [ (xcor - cx) ^ 2 + (ycor - cy) ^ 2 ]
+    let q min (list desired [stock] of s)
+    ask s [
+      set stock stock - q
+      set sales-day sales-day + q
+      set visits-today visits-today + 1
+      if visits-today &gt; 0.5 * station-service-capacity [          ; queue at a busy station
+        set K5-total-hours K5-total-hours + (visits-today / station-service-capacity) * 2
+      ]
+    ]
+    set fuel-stock fuel-stock + q
+    set sales-today sales-today + q
+    set search-radius base-search-radius
+    set failed-today? false
+  ] [
+    set failed-today? true
+    set search-radius min (list max-radius (search-radius + radius-growth))
+    ; failed visit to an overloaded station (fuel available, service capacity exhausted) - +2 hours
+    if any? stations with [
+      stock &gt; 1 and visits-today &gt;= station-service-capacity
+      and ((xcor - cx) ^ 2 + (ycor - cy) ^ 2) &lt;= r2 ] [
+      set K5-total-hours K5-total-hours + 2
+    ]
+  ]
+end
+
+;; price: adjustment based on how well station stocks cover demand
+;; coverage = sum of station stocks (at ordering time) / smoothed sum of desired purchases (EMA 7 days);
+;; target-coverage = price-coverage-coef (0.98) * sales-weighted mean target-days of stations.
+;; A reversion to the reference price at the same speed price-adj-speed is added to the multiplicative formula.
+;; When L6 is active the price is capped.
+to update-price
+  let coverage station-stock-at-order / max (list 1 desired-avg)
+  let gap (target-coverage - coverage) / target-coverage        ; &gt; 0 - stock deficit, &lt; 0 - surplus
+  set price price * (1 + price-adj-speed * gap)
+  set price price + price-adj-speed * (1 - price)               ; reversion to the reference price
+  set price max (list 0.8 (min (list 5 price)))
+  if L6-active? [ set price min (list price L6-price-cap) ]
+end
+
+;; K4 - consumer overpayment, m.u. (only when price &gt; 1)
+to update-kpi
+  if price &gt; 1 [
+    set K4-total K4-total + (price - 1) * ref-price * sales-today
+                          + 0.5 * (price - 1) * ref-price * K1-today
+  ]
+end
+
+to update-dry-share
+  set dry-share (count stations with [ stock &lt; 0.05 * max-stock ]) / (count stations)
+end
+
+;; world view: station color by supplier, brightness by stock; consumers turn red after a failed attempt
+to update-visuals
+  ask stations [
+    let fill min (list 1 (stock / max-stock))
+    set color (hue - 4) + 8 * fill
+  ]
+  ask consumers [ set color ifelse-value failed-today? [ red ] [ gray ] ]
+end
+
+;; ---------------------------------------------------------------------
+;; Reporters for monitors, plots and experiments.
+;; All are wrapped in with-local-randomness: [x] of agentset iterates over agents in random order
+;; and would advance the main random generator, so polling reporters would change the trajectory (check C5).
+;; ---------------------------------------------------------------------
+to-report total-station-stock
+  let r 0  with-local-randomness [ set r sum [stock] of stations ]  report r
+end
+to-report total-consumer-stock
+  let r 0  with-local-randomness [ set r sum [fuel-stock] of consumers ]  report r
+end
+to-report total-refinery-stock
+  let r 0  with-local-randomness [ set r sum [stock] of refineries ]  report r
+end
+to-report total-pipeline-stock
+  let r 0  with-local-randomness [ set r sum [sum pipeline] of stations ]  report r
+end
+;; number of cars that failed to refuel today (failed-today? = true)
+to-report failed-count
+  let r 0  with-local-randomness [ set r count consumers with [ failed-today? ] ]  report r
+end
+to-report mean-perceived-shortage
+  let r 0  with-local-randomness [ if any? consumers [ set r mean [perceived-shortage] of consumers ] ]  report r
+end
+;; share of market capacity lost in the shock
+to-report market-capacity-loss
+  let r 0
+  with-local-randomness [
+    let tot sum [capacity] of refineries
+    if tot &gt; 0 [ set r shock-depth * (sum [capacity] of refineries with [ shocked? ]) / tot ]
+  ]
+  report r
+end
+to-report K5-per-car
+  if n-consumers = 0 [ report 0 ]
+  report K5-total-hours / n-consumers
+end
+</code>
+  <widgets>
+    <view x="1290" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-25" height="469" showTickCounter="true" patchSize="9.0" fontSize="10" wrappingAllowedY="false" width="469" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25" />
+    <button x="10" y="10" width="190" height="45" kind="Observer" forever="false" disableUntilTicks="false" display="setup">setup</button>
+    <button x="10" y="65" width="190" height="45" kind="Observer" forever="true" disableUntilTicks="false" display="go">go</button>
+    <button x="10" y="120" width="190" height="45" kind="Observer" forever="false" disableUntilTicks="false" display="go-once">go</button>
+    <switch x="10" y="175" width="190" height="40" on="false" variable="L2-export-ban?" display="L2-export-ban?" />
+    <switch x="10" y="225" width="190" height="40" on="false" variable="L3-quality-relax?" display="L3-quality-relax?" />
+    <switch x="10" y="275" width="190" height="40" on="false" variable="L4-import?" display="L4-import?" />
+    <switch x="10" y="325" width="190" height="40" on="false" variable="L5-fillup-limit?" display="L5-fillup-limit?" />
+    <switch x="10" y="375" width="190" height="40" on="false" variable="L6-price-cap?" display="L6-price-cap?" />
+    <slider x="210" y="10" width="190" height="50" display="L3-share-naphtha" variable="L3-share-naphtha" min="0.0" max="0.5" default="0.15" step="0.05" direction="Horizontal" />
+    <slider x="210" y="70" width="190" height="50" display="L4-import-limit" variable="L4-import-limit" min="0.0" max="0.3" default="0.1" step="0.01" direction="Horizontal" />
+    <slider x="210" y="130" width="190" height="50" display="L4-subsidy" variable="L4-subsidy" min="0.0" max="0.5" default="0.25" step="0.05" direction="Horizontal" />
+    <slider x="210" y="190" width="190" height="50" display="L5-liters-per-fillup" variable="L5-liters-per-fillup" min="10.0" max="100.0" default="30.0" step="5.0" direction="Horizontal" />
+    <slider x="210" y="250" width="190" height="50" display="L6-price-cap" variable="L6-price-cap" min="1.0" max="2.0" default="1.1" step="0.05" direction="Horizontal" />
+    <slider x="210" y="310" width="190" height="50" display="shock-depth" variable="shock-depth" min="0.0" max="1.0" default="0.5" step="0.05" direction="Horizontal" />
+    <slider x="210" y="370" width="190" height="50" display="seed" variable="seed" min="0.0" max="1000.0" default="0.0" step="1.0" direction="Horizontal" />
+    <monitor x="410" y="10" width="190" height="60" fontSize="11" precision="0" display="seed-used">seed-used</monitor>
+    <monitor x="410" y="80" width="190" height="60" fontSize="11" precision="3" display="price index">price</monitor>
+    <monitor x="410" y="150" width="190" height="60" fontSize="11" precision="0" display="import (l/day)">import-today</monitor>
+    <monitor x="410" y="220" width="190" height="60" fontSize="11" precision="0" display="export (l/day)">export-today</monitor>
+    <monitor x="610" y="10" width="190" height="60" fontSize="11" precision="0" display="K0 physical shortage (l)">K0-total</monitor>
+    <monitor x="610" y="80" width="190" height="60" fontSize="11" precision="0" display="K1 demand cut by price (l)">K1-total</monitor>
+    <monitor x="610" y="150" width="190" height="60" fontSize="11" precision="0" display="K2 import subsidy (m.u.)">K2-total</monitor>
+    <monitor x="610" y="220" width="190" height="60" fontSize="11" precision="0" display="K3 low-grade volume (l)">K3-volume-total</monitor>
+    <monitor x="610" y="290" width="190" height="60" fontSize="11" precision="0" display="K4 overpayment (m.u.)">K4-total</monitor>
+    <monitor x="610" y="360" width="190" height="60" fontSize="11" precision="0" display="K5 queues (car-h)">K5-total-hours</monitor>
+    <plot x="810" y="10" width="230" height="165" display="Price index" xAxis="day" yAxis="index" xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0" autoPlotX="true" autoPlotY="true" legend="true"><setup /><update /><pen interval="1.0" mode="0" display="price" color="-16777216" legend="true"><setup /><update>plot price</update></pen></plot>
+    <plot x="810" y="185" width="230" height="165" display="Cars failed to refuel" xAxis="day" yAxis="cars/day" xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0" autoPlotX="true" autoPlotY="true" legend="true"><setup /><update /><pen interval="1.0" mode="0" display="failed" color="-2674135" legend="true"><setup /><update>plot failed-count</update></pen></plot>
+    <plot x="1050" y="185" width="230" height="165" display="Sales (liters/day)" xAxis="day" yAxis="liters/day" xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0" autoPlotX="true" autoPlotY="true" legend="true"><setup /><update /><pen interval="1.0" mode="0" display="sales" color="-13345367" legend="true"><setup /><update>plot sales-today</update></pen></plot>
+    <plot x="1050" y="10" width="230" height="165" display="Dry stations and perceived shortage" xAxis="day" yAxis="share" xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0" autoPlotX="true" autoPlotY="true" legend="true"><setup /><update /><pen interval="1.0" mode="0" display="dry-share" color="-2674135" legend="true"><setup /><update>plot dry-share</update></pen><pen interval="1.0" mode="0" display="perceived shortage" color="-13345367" legend="true"><setup /><update>plot mean-perceived-shortage</update></pen></plot>
+  </widgets><info>## WHAT IS IT?
+
+Simplified ABM "Refinery outages and gasoline shortage". 1 tick = 1 day. From day 5 refinery No. 1 permanently loses the share shock-depth of its capacity.
+
+## HOW TO USE IT
+
+Turn on the levers with the switches L2-L6, press setup, then go. The model runs without a time limit.
+L1 = "do nothing" (baseline) and has no switch. Policy packages: P0 - all off; P1 - L3 + L5 + L6; P2 - L2 + L4.
+Measures take effect policy-delay days (7-10) after the shock starts.
+seed = 0 gives a random seed (monitor seed-used); seed &gt; 0 reproduces a run.
+
+## KPIs
+
+K0 physical shortage (L), K1 demand cut by price (L), K2 import subsidy (m.u.), K3 low-grade gasoline volume (L), K4 consumer overpayment (m.u.), K5 queues (car-hours).
+
+## CONSTANTS
+
+All other parameters are set in the set-constants procedure on the Code tab (block "=== CONSTANTS ==="). Money (K2, K4) is in monetary units; the reference price is 1 m.u./L.</info>
+  <turtleShapes>
+    <shape name="default" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="5" />
+        <point x="40" y="250" />
+        <point x="150" y="205" />
+        <point x="260" y="250" />
+      </polygon>
+    </shape>
+    <shape name="circle" rotatable="false" editableColorIndex="0">
+      <circle color="-1920102913" filled="true" marked="true" x="0" y="0" diameter="300" />
+    </shape>
+      <shape name="house" rotatable="false" editableColorIndex="0">
+      <rectangle endX="255" startY="120" marked="true" color="-1920102913" endY="285" startX="45" filled="true" />
+      <rectangle endX="180" startY="210" marked="false" color="255" endY="285" startX="120" filled="true" />
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="15" y="120" />
+        <point x="150" y="15" />
+        <point x="285" y="120" />
+      </polygon>
+      <line endX="270" startY="120" marked="false" color="255" endY="120" startX="30" />
+    </shape>
+    <shape name="square" rotatable="false" editableColorIndex="0">
+      <rectangle endX="270" startY="30" marked="true" color="-1920102913" endY="270" startX="30" filled="true" />
+    </shape>
+    <shape name="dot" rotatable="false" editableColorIndex="0">
+      <circle x="90" y="90" marked="true" color="-1920102913" diameter="120" filled="true" />
+    </shape>
+  </turtleShapes>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0" />
+          <dash value="1.0" />
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0" />
+          <dash value="0.0" />
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0" />
+          <dash value="1.0" />
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150" />
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150" />
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
+</model>
