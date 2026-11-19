@@ -1,5 +1,5 @@
 {
- "created": "2026-11-19 13:32",
+ "created": "2026-11-19 22:22",
  "netlogo_version": "7.0.4",
  "model_file": "refinery_shock_abm.nlogox",
  "model_sha256": "2b246166dc0c118265a926ba837fad5e54d133f1dc980da4569aabaff48f5379",
@@ -128,7 +128,55 @@
  "runs_per_hour": 164.33666376200247,
  "screening_design": "half_resV",
  "checks": {
-  "2^(5-1): главные эффекты и парные взаимодействия не смешаны": {
+  "same seed -> same KPIs": {
+   "ok": true,
+   "detail": "{'K0': 2076.324746193259, 'K1': 94894.47815616099, 'K2': 124363.51146891803, 'K3_volume': 408447.8626125753, 'K4': 499611.5377961495, 'K5_hours': 67306.80533333427}"
+  },
+  "daily readout does not alter the trajectory": {
+   "ok": true,
+   "detail": ""
+  },
+  "(a) nominal override = no override": {
+   "ok": true,
+   "detail": ""
+  },
+  "(b) panic-i x2": {
+   "ok": true,
+   "detail": "1.0002 -> 2.0004"
+  },
+  "(b) capacity x (1.12/1.06)": {
+   "ok": true,
+   "detail": ""
+  },
+  "(b) random stream not shifted (policy-delay, coordinates)": {
+   "ok": true,
+   "detail": ""
+  },
+  "(c) panic 2.0 yields higher K0 than 0.5": {
+   "ok": true,
+   "detail": "8826 vs 45969"
+  },
+  "(c) under L2: normal-surplus 0.12 yields lower K0 than 0.02": {
+   "ok": true,
+   "detail": "27367 vs 923"
+  },
+  "C1: price 1 ± 0.03 after day 20": {
+   "ok": false,
+   "detail": "min 0.980, max 1.035"
+  },
+  "C1: K0 ~ 0": {
+   "ok": true,
+   "detail": "K0 = 0.0 L"
+  },
+  "C1: dry-share < 0.05": {
+   "ok": false,
+   "detail": "max 0.100"
+  },
+  "mass balance": {
+   "ok": true,
+   "detail": "max |residual| = 1.26e-09 L (8.4e-14 D0)"
+  },
+  "2^(5-1): main effects and pairwise interactions are not confounded": {
    "ok": true,
    "detail": ""
   }
