@@ -1,11 +1,13 @@
 """
-batch_runner.py - пакетный запуск прогонов для этапов 1-5 (поверх abm_runner.run_one).
+batch_runner.py - batch execution of runs for stages 1-5
 
-Отличия от abm_runner.run_batch:
-  * живой журнал с временем, скоростью и оценкой окончания (печать раз в log_every секунд);
-  * фиксированный порядок столбцов в CSV (дозапись не сдвигает столбцы), ошибки - в отдельный файл;
-  * возобновление по run_id после обрыва;
-  * на Windows не даёт системе уснуть, пока идут прогоны.
+Replaces functionality from abm_runner.run_batch. Improvements include:
+  * live log with elapsed time, rate, and ETA (printed every log_every seconds);
+  * fixed column order in the CSV (appends don't shift columns), errors go to a separate file;
+  * resume by run_id after an interruption;
+  * on Windows, prevents the system from sleeping while runs are in progress;
+  * on completion, forcibly terminates pool processes (the JVM does not exit on its own);
+  * all console output is in English.
 """
 from __future__ import annotations
 
@@ -38,7 +40,15 @@ def _task(job):
 
 
 def read_results(path) -> pd.DataFrame:
-    """CSV результатов -> DataFrame; переживает выравнивание пробелами в редакторе."""
+    """
+    This function reads a CSV file and returns a DataFrame with cleaned column names and types.
+
+    Parameters:
+        path: The path to the CSV file to be read.
+
+    Returns:
+        A pandas DataFrame containing the data from the CSV file, with cleaned column names and types.
+    """
     df = pd.read_csv(path, skipinitialspace=True)
     df.columns = [c.strip() for c in df.columns]
     for c in df.columns:
@@ -52,7 +62,9 @@ def read_results(path) -> pd.DataFrame:
 
 
 class _KeepAwake:
-    """Windows: запрет сна на время прогонов (SetThreadExecutionState). На других ОС ничего не делает."""
+    """
+    This class prevents the system from going to sleep while the context is active.
+    """
 
     def __enter__(self):
         if sys.platform == "win32":
@@ -69,9 +81,21 @@ class _KeepAwake:
 
 def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_every=60, resume=True):
     """
-    Выполняет задания, дописывает результаты в out_csv (ошибки - в out_csv с суффиксом .errors.csv).
-    n_workers = 1: в процессе ноутбука (нужен link); > 1: пул процессов, в каждом своя JVM.
-    Возвращает DataFrame всех результатов (включая посчитанные ранее).
+    This function executes a batch of jobs and appends the results to a specified CSV file.
+    If any errors occur during the execution of a job, they are logged to a separate error CSV file with a ".errors.csv" suffix.
+    
+    Parameters:
+        jobs: A list of job dictionaries to be executed.
+        cfg: A configuration dictionary containing settings for the execution.
+        out_csv: The path to the output CSV file where results will be appended.
+        n_workers: The number of worker processes to use for parallel execution (default is 1).
+        link: An optional link object for communication with the model (required if n_workers=1).
+        flush_every: The number of completed jobs after which results are flushed to the output CSV (default is 10).
+        log_every: The number of seconds between logging progress updates (default is 60).
+        resume: A boolean indicating whether to resume from a previous run by skipping already completed jobs (default is True).
+        
+    Returns:
+        A pandas DataFrame containing the results of all executed jobs, including any errors that occurred.    
     """
     out_csv = Path(out_csv)
     err_csv = out_csv.with_suffix(".errors.csv")
@@ -82,7 +106,7 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
         done = set(prev["run_id"])
         jobs = [j for j in jobs if j["run_id"] not in done]
         print(
-            f"{time.strftime('%H:%M:%S')} уже посчитано {len(done)}, осталось {len(jobs)}", flush=True)
+            f"{time.strftime('%H:%M:%S')} already done: {len(done)}, remaining: {len(jobs)}", flush=True)
     total = len(jobs)
     if total == 0:
         return read_results(out_csv)
@@ -91,6 +115,10 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
     t0 = last_log = time.perf_counter()
 
     def flush():
+        """
+        This function flushes the buffer to the output CSV file and resets the buffer.
+        
+        """
         nonlocal buffer, columns
         if not buffer:
             return
@@ -108,7 +136,7 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
             n_err += 1
             pd.DataFrame([r]).to_csv(err_csv, mode="a",
                                      header=not err_csv.exists(), index=False)
-            print(f"ОШИБКА в {r['run_id']}:\n{r['error'][-800:]}", flush=True)
+            print(f"ERROR in {r['run_id']}:\n{r['error'][-800:]}", flush=True)
         else:
             buffer.append(r)
         if len(buffer) >= flush_every:
@@ -118,17 +146,17 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
             el = now - t0
             rate = n_done / el * 3600
             eta = (total - n_done) / max(n_done / el, 1e-9) / 60
-            print(f"{time.strftime('%H:%M:%S')} {n_done}/{total} | {el / 60:.0f} мин | "
-                  f"{rate:.0f} прогонов/ч | осталось ~{eta:.0f} мин | ошибок {n_err}", flush=True)
+            print(f"{time.strftime('%H:%M:%S')} {n_done}/{total} | {el / 60:.0f} min | "
+                  f"{rate:.0f} runs/h | ETA ~{eta:.0f} min | errors {n_err}", flush=True)
             last_log = now
 
-    print(f"{time.strftime('%H:%M:%S')} старт: {total} прогонов, процессов: {n_workers}", flush=True)
+    print(f"{time.strftime('%H:%M:%S')} start: {total} runs, workers: {n_workers}", flush=True)
     with _KeepAwake():
         try:
             if n_workers <= 1:
                 if link is None:
                     raise ValueError(
-                        "для n_workers = 1 нужен link = ar.make_link(CFG)")
+                        "n_workers = 1 requires link = ar.make_link(CFG)")
                 for j in jobs:
                     try:
                         handle(ar.run_one(link, j, cfg))
@@ -145,16 +173,16 @@ def run_jobs(jobs, cfg, out_csv, n_workers=1, link=None, flush_every=10, log_eve
                             pending, timeout=log_every, return_when=FIRST_COMPLETED)
                         if not fin:
                             print(
-                                f"{time.strftime('%H:%M:%S')} ... работаю, {n_done}/{total}", flush=True)
+                                f"{time.strftime('%H:%M:%S')} ... working, {n_done}/{total}", flush=True)
                         for f in fin:
                             handle(f.result())
                 finally:
-                    # процесс с JVM сам не завершается (JPype ждёт потоки NetLogo) - завершаем принудительно
+                    # the JVM process doesn't exit on its own (JPype waits for NetLogo threads) - terminate forcibly
                     for p in list(getattr(ex, "_processes", {}).values()):
                         p.terminate()
                     ex.shutdown(wait=False, cancel_futures=True)
         finally:
             flush()
     el = time.perf_counter() - t0
-    print(f"{time.strftime('%H:%M:%S')} готово: {n_done} за {el / 60:.1f} мин, ошибок {n_err}", flush=True)
+    print(f"{time.strftime('%H:%M:%S')} done: {n_done} in {el / 60:.1f} min, errors {n_err}", flush=True)
     return read_results(out_csv)
