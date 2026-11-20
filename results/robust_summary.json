@@ -1,0 +1,250 @@
+{
+ "created": "2026-11-20 04:42",
+ "model_sha256": "2b246166dc0c118265a926ba837fad5e54d133f1dc980da4569aabaff48f5379",
+ "R": 2,
+ "seeds": [
+  611,
+  262
+ ],
+ "shocks": [
+  0.2,
+  0.45,
+  0.7
+ ],
+ "n_uncertainty_points": 40,
+ "unc_ranges": {
+  "panic-sensitivity": [
+   0.5,
+   2.0
+  ],
+  "tau-down": [
+   7,
+   30
+  ],
+  "w-own-experience": [
+   0.2,
+   0.8
+  ],
+  "price-elasticity": [
+   -0.4,
+   -0.05
+  ],
+  "normal-surplus": [
+   0.02,
+   0.12
+  ]
+ },
+ "thresholds": {
+  "K0_rel": 0.1,
+  "K4_rel": 0.5,
+  "K5_excess": 5.0,
+  "COST": 300000
+ },
+ "c3_nominal": 0.25,
+ "n_runs": 2640,
+ "sec_per_run_mean": 16.813808918106023,
+ "n_workers": 2,
+ "answer_per_shock": {
+  "0.2": {
+   "strategy": "S1",
+   "point_id": "A31",
+   "score_p90": 0.17303760566935106,
+   "pass_share": 0.925
+  },
+  "0.45": {
+   "strategy": "S1",
+   "point_id": "A31",
+   "score_p90": 0.2149208398836198,
+   "pass_share": 0.6375
+  },
+  "0.7": {
+   "strategy": "S1",
+   "point_id": "A31",
+   "score_p90": 0.20972219536398332,
+   "pass_share": 0.3
+  }
+ },
+ "robust_strategy": {
+  "strategy": "S1",
+  "point_id": "A31",
+  "worst_shock_score_p90": 0.2149208398836198
+ },
+ "strategies": {
+  "S1": {
+   "point_id": "A31",
+   "role": "best worst-case score across shocks",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.0,
+    "L4-import-limit": 0.22,
+    "L5-liters-per-fillup": 70.0,
+    "L6-price-cap": 1.35,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S2": {
+   "point_id": "A15",
+   "role": "best at shock 0.2",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.05,
+    "L4-import-limit": 0.13,
+    "L5-liters-per-fillup": 65.0,
+    "L6-price-cap": 1.05,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S3": {
+   "point_id": "A53",
+   "role": "best at shock 0.45",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.0,
+    "L4-import-limit": 0.1,
+    "L5-liters-per-fillup": 50.0,
+    "L6-price-cap": 1.15,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S4": {
+   "point_id": "A41",
+   "role": "best at shock 0.7",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.15,
+    "L4-import-limit": 0.08,
+    "L5-liters-per-fillup": 60.0,
+    "L6-price-cap": 1.75,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S5": {
+   "point_id": "A09",
+   "role": "closest to ideal at shock 0.45",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.1,
+    "L4-import-limit": 0.03,
+    "L5-liters-per-fillup": 45.0,
+    "L6-price-cap": 1.25,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S6": {
+   "point_id": "A23",
+   "role": "closest to ideal at shock 0.7",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.05,
+    "L4-import-limit": 0.09,
+    "L5-liters-per-fillup": 50.0,
+    "L6-price-cap": 1.55,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S7": {
+   "point_id": "A30",
+   "role": "minimum shortage (max supply)",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L3-share-naphtha": 0.45,
+    "L4-import-limit": 0.11,
+    "L5-liters-per-fillup": 40.0,
+    "L6-price-cap": 1.35,
+    "L4-subsidy": 0.25
+   }
+  },
+  "S8": {
+   "point_id": "A59",
+   "role": "minimum overpayment, expensive",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": true,
+    "L4-subsidy": 0.25,
+    "L3-share-naphtha": 0.05,
+    "L4-import-limit": 0.26,
+    "L5-liters-per-fillup": 50.0,
+    "L6-price-cap": 1.1
+   }
+  },
+  "S9": {
+   "point_id": "B36",
+   "role": "best without price cap",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": true,
+    "L4-import?": true,
+    "L5-fillup-limit?": true,
+    "L6-price-cap?": false,
+    "L4-subsidy": 0.25,
+    "L3-share-naphtha": 0.05,
+    "L4-import-limit": 0.11,
+    "L5-liters-per-fillup": 45.0,
+    "L6-price-cap": 1.1
+   }
+  },
+  "none": {
+   "point_id": "none",
+   "role": "reference",
+   "params": {
+    "L2-export-ban?": false,
+    "L3-quality-relax?": false,
+    "L4-import?": false,
+    "L5-fillup-limit?": false,
+    "L6-price-cap?": false,
+    "L3-share-naphtha": 0.15,
+    "L4-import-limit": 0.1,
+    "L4-subsidy": 0.25,
+    "L5-liters-per-fillup": 30.0,
+    "L6-price-cap": 1.1
+   }
+  },
+  "L2_only": {
+   "point_id": "L2_only",
+   "role": "reference",
+   "params": {
+    "L2-export-ban?": true,
+    "L3-quality-relax?": false,
+    "L4-import?": false,
+    "L5-fillup-limit?": false,
+    "L6-price-cap?": false,
+    "L3-share-naphtha": 0.15,
+    "L4-import-limit": 0.1,
+    "L4-subsidy": 0.25,
+    "L5-liters-per-fillup": 30.0,
+    "L6-price-cap": 1.1
+   }
+  }
+ }
+}
