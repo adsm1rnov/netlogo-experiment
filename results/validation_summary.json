@@ -1,0 +1,49 @@
+{
+ "created": "2026-11-20 12:53",
+ "model_sha256": "2b246166dc0c118265a926ba837fad5e54d133f1dc980da4569aabaff48f5379",
+ "seeds_v1": [
+  379,
+  840,
+  676,
+  490,
+  279,
+  117,
+  405,
+  789,
+  567,
+  266
+ ],
+ "seed_v2": 102,
+ "n_points_v2": 20,
+ "robust_strategy_stage3": "S1",
+ "rivals": [
+  "S9",
+  "S4",
+  "S6"
+ ],
+ "best_v1_by_shock": {
+  "0.2": "S3",
+  "0.45": "S1",
+  "0.7": "S9"
+ },
+ "spearman_v1_vs_stage3": {
+  "0.2": 0.9545454545454546,
+  "0.45": 0.9363636363636365,
+  "0.7": 0.9363636363636365
+ },
+ "answer_per_shock_v2": {
+  "0.2": "S1",
+  "0.45": "S1",
+  "0.7": "S1"
+ },
+ "robust_strategy_v2": "S1",
+ "checks": {
+  "robust strategy unchanged in V2": true,
+  "robust strategy best or not significantly worse in V1 at every shock": false,
+  "rank correlation with stage 3 >= 0.8 at every shock": true
+ },
+ "n_runs": {
+  "v1": 330,
+  "v2": 660
+ }
+}
