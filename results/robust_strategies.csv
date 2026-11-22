@@ -1,12 +1,12 @@
-﻿strategy,point_id,role,L2,L3,L4,L5_L,L6_cap
-S1,A31,best worst-case score across shocks,True,0.0,0.22,70.0,1.35
-S2,A15,best at shock 0.2,True,0.05,0.13,65.0,1.05
-S3,A53,best at shock 0.45,True,0.0,0.1,50.0,1.15
-S4,A41,best at shock 0.7,True,0.15,0.08,60.0,1.75
-S5,A09,closest to ideal at shock 0.45,True,0.1,0.03,45.0,1.25
-S6,A23,closest to ideal at shock 0.7,True,0.05,0.09,50.0,1.55
-S7,A30,minimum shortage (max supply),True,0.45,0.11,40.0,1.35
-S8,A59,"minimum overpayment, expensive",True,0.05,0.26,50.0,1.1
-S9,B36,best without price cap,True,0.05,0.11,45.0,off
-none,none,reference,False,0.0,0.0,off,off
-L2_only,L2_only,reference,True,0.0,0.0,off,off
+﻿strategy, point_id, role                               , L2   , L3  , L4  , L5_L, L6_cap
+S1      , A31     , best worst-case score across shocks, True , 0.0 , 0.22, 70.0, 1.35
+S2      , A15     , best at shock 0.2                  , True , 0.05, 0.13, 65.0, 1.05
+S3      , A53     , best at shock 0.45                 , True , 0.0 , 0.1 , 50.0, 1.15
+S4      , A41     , best at shock 0.7                  , True , 0.15, 0.08, 60.0, 1.75
+S5      , A09     , closest to ideal at shock 0.45     , True , 0.1 , 0.03, 45.0, 1.25
+S6      , A23     , closest to ideal at shock 0.7      , True , 0.05, 0.09, 50.0, 1.55
+S7      , A30     , minimum shortage (max supply)      , True , 0.45, 0.11, 40.0, 1.35
+S8      , A59     , "minimum overpayment, expensive"   , True , 0.05, 0.26, 50.0, 1.1
+S9      , B36     , best without price cap             , True , 0.05, 0.11, 45.0, off
+none    , none    , reference                          , False, 0.0 , 0.0 , off , off
+L2_only , L2_only , reference                          , True , 0.0 , 0.0 , off , off
